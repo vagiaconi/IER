@@ -236,7 +236,7 @@ kable(ramat, caption = "Número de establecimientos  por provincia y modalidad d
 plot_rama22<-ggplot(rama, aes(fill=Rama, y=Nro_EE, x=Provincia)) + 
     geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Provincia",fill = "Rama")
 
-png(filename = "Figura6_rama_provincia.png", width = 14, height = 10, units="cm", res=300)
+png(filename = "Figura7_rama_provincia.png", width = 14, height = 10, units="cm", res=300)
 print(plot_rama22)
 dev.off()
 

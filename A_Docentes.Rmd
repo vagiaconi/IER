@@ -70,6 +70,8 @@ dev.off()
 depet <- table(ee22$NOM_DEPROV_RBD,ee22$DOC_GENERO)
 depe <- as.data.frame(depet)
 colnames(depe)<-c("Provincia","genero","Nro_DD")
+depe$genero<-ifelse(depe$genero==1,"Hombres",depe$genero)
+depe$genero<-ifelse(depe$genero==2,"Mujeres",depe$genero)  
 kable(depet, caption = "Número de docentes ejerciendo en la Región de O'Higgins por provincia y género durante el año 2022.")
 
 plot_dep22<-ggplot(depe, aes(fill=genero, y=Nro_DD, x=Provincia)) + 
