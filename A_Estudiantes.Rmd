@@ -1,0 +1,210 @@
+---
+title: "A_Estudiantes"
+output:
+  html_document: default
+  word_document: default
+date: "2023-11-03"
+---
+
+En este archivo se presentan los códigos para generar los resultados de la sección "Estudiantes" del "Informe Estadístico sobre el sistema educacional escolar en la Región de O'Higgins entre los años 2018 y 2022". Para este apartado se seleccionaron los estudiantes originarios de la Región de O'Higgins, que no necesariamente estudian en la región. 
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(knitr)
+load("/Users/valentinagiaconi/Dropbox/ICEd/IER/Scripts/BD_estudiantes.RData")
+
+
+###### Asignación de provincia de origen de estudiante a partir de comuna
+for(i in 1:length(ee)){
+  ee_aux<-ee[[i]]
+  ee_aux$NOM_DEPROV_ALU <- NA
+  ee_aux$NOM_DEPROV_ALU <- ifelse(round(ee_aux$COD_COM_ALU/100,0)==61,"CACHAPOAL",ee_aux$NOM_DEPROV_ALU)
+  ee_aux$NOM_DEPROV_ALU <- ifelse(round(ee_aux$COD_COM_ALU/100,0)==62,"CARDENAL CARO",ee_aux$NOM_DEPROV_ALU)
+  ee_aux$NOM_DEPROV_ALU <- ifelse(round(ee_aux$COD_COM_ALU/100,0)==63,"COLCHAGUA",ee_aux$NOM_DEPROV_ALU)
+  ee_aux$NOM_DEPROV_ALU <- ifelse(!(round(ee_aux$COD_COM_ALU/100,0) %in% c(61,62,63)),"OTRA REGION",ee_aux$NOM_DEPROV_ALU)
+  ee[[i]]<-ee_aux
+  
+}
+
+rm(ee_aux)
+
+ee22<-ee[[5]]
+
+###### CIERRE: Asignación de provincia de origen de estudiante a partir de comuna
+  
+```
+
+```{r}
+ee22$NOM_DEPROV_RBD_simple<-ifelse(ee22$NOM_DEPROV_RBD %in% c("CACHAPOAL","COLCHAGUA","CARDENAL CARO"),ee22$NOM_DEPROV_RBD,"OTRA")
+table(ee22$NOM_DEPROV_RBD_simple)/188836
+round(100*table(ee22$NOM_DEPROV_ALU,ee22$NOM_DEPROV_RBD)/188836,1) 
+# Se puede observar que un 4% de estudiantes originarios de la Región de O'Higgins no estudia en la región.
+```
+
+
+# Estudiantes
+
+## Panorama General
+
+```{r panorama}
+# Tabla con total de estudiantes
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+ccachapoal_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_ALU")]=="CACHAPOAL")})
+ccardenal_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_ALU")]=="CARDENAL CARO")})
+ccolchagua_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_ALU")]=="COLCHAGUA")})
+
+tab_panorama<-data.frame(agno=cagno_tab,ncachapoal=ccachapoal_tab,ncardenal=ccardenal_tab,ncolchagua=ccolchagua_tab,total=ctotal_tab)
+
+kable(x=tab_panorama,col.names = c("Año","Cachapoal","Cardenal Caro","Colchagua","Región de O'Higgins"), caption = "Número de estudiantes de la región y de cada provincia de la Región de O'Higgins")
+
+```
+
+## Dependencia
+
+
+```{r dependencia-regional}
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+cmu<-sapply(ee,function(x){sum(x[,c("dep")]=="Municipal")})
+cpp<-sapply(ee,function(x){sum(x[,c("dep")]=="Part. Pag.")})
+cps<-sapply(ee,function(x){sum(x[,c("dep")]=="Part. Subv.")})
+csl<-sapply(ee,function(x){sum(x[,c("dep")]=="SLEP")})
+cad<-sapply(ee,function(x){sum(x[,c("dep")]=="Adm. Del.")})
+
+tab_dep<-data.frame(cagno_tab,cmu,csl,cad,cps,cpp,ctotal_tab)
+
+kable(x=tab_dep,col.names = c("Año","Municipal","SLEP","Adm. Del.","Part. Subv.","Part. Pag.","Región de O'Higgins"), caption = "Número de estudiantes de la Región de O'Higgins por tipo de dependencia")
+
+
+tab_dept<-as.data.frame(t(tab_dep))
+colnames(tab_dept)<-paste("a",tab_dep[,1],sep="")
+tab_dept<-tab_dept[2:(nrow(tab_dept)-1),]
+tab_dept$dep<-c("Municipal","SLEP","Adm. Del.","Part. Subv.","Part. Pag.") # rownames(tab_dept)
+tab_dept_long<- reshape(tab_dept, varying = paste("a",tab_dep[,1],sep=""),v.names = "Nro_EE", timevar = "agno",times=tab_dep[,1],direction = "long")
+  
+plot_dep1<-ggplot(tab_dept_long, aes(fill=dep, y=Nro_EE, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de estudiantes", x = "Año",fill = "Dependencia")
+print(plot_dep1)
+
+png(filename = "Figura8_estudiantes_dep_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep1)
+dev.off()
+
+### Zoom agno 2022
+depet <- table(ee22$NOM_DEPROV_ALU,ee22$dep)
+depe <- as.data.frame(depet)
+colnames(depe)<-c("Provincia","Dependencia","Nro_EE")
+kable(depet, caption = "Número de estudiantes originarios de la Región de O'Higgins por provincia y dependencia durante el año 2022.")
+
+plot_dep22<-ggplot(depe, aes(fill=Dependencia, y=Nro_EE, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de estudiantes", x = "Provincia",fill = "Dependencia")
+print(plot_dep22)
+
+png(filename = "Figura9_estudiantes_dependencia_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep22)
+dev.off()
+
+
+```
+
+
+## Ruralidad
+
+```{r ruralidad-establecimientos}
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+cru<-sapply(ee,function(x){sum(x[,c("RURAL_RBD")]==1)})
+cur<-sapply(ee,function(x){sum(x[,c("RURAL_RBD")]==0)})
+por.rural<- round(100*cru/ctotal_tab,1)
+por.urban<- round(100*cur/ctotal_tab,1)
+
+tab_rur<-data.frame(cagno_tab,cru,cur,por.rural,por.urban,ctotal_tab)
+
+kable(x=tab_rur,col.names = c("Año","Rural","Urbano","% Rural.","% Urbano","Región de O'Higgins"), caption = "Número y porcentaje de estudiantes originarios de la región de Región de O'Higgins estudiando en establecimientos rurales o urbanos.")
+
+
+# create a dataset
+tab_rurt<-as.data.frame(t(tab_rur))
+colnames(tab_rurt)<-paste("a",tab_rur[,1],sep="")
+tab_rurt<-tab_rurt[rownames(tab_rurt) %in% c("por.rural","por.urban"),]
+tab_rurt$rur<-rownames(tab_rurt)
+tab_rurt$rur<-ifelse(tab_rurt$rur=="por.rural","Rural",tab_rurt$rur)
+tab_rurt$rur<-ifelse(tab_rurt$rur=="por.urban","Urbano",tab_rurt$rur)
+tab_rurt_long<- reshape(tab_rurt, varying = paste("a",tab_rur[,1],sep=""),v.names = "Nro_EE", timevar = "agno",times=tab_rur[,1],direction = "long")
+  
+# Stacked + percent
+plot_rur1<-ggplot(tab_rurt_long, aes(fill=rur, y=Nro_EE, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de estudiantes", x = "Año",fill = "Ruralidad")
+print(plot_rur1)
+
+png(filename = "Figura10_estudiantes_rural_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rur1)
+dev.off()
+
+### Zoom agno 2022
+rurt <- table(ee22$NOM_DEPROV_ALU,ee22$ruralidad)
+rur <- as.data.frame(rurt)
+colnames(rur)<-c("Provincia","Ruralidad","Nro_EE")
+
+plot_rur22<-ggplot(rur, aes(fill=Ruralidad, y=Nro_EE, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de estudiantes", x = "Provincia",fill = "Ruralidad")
+print(plot_rur22)
+
+png(filename = "Figura11_estudiantes_rural_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rur22)
+dev.off()
+
+```
+
+## Modalidades de enseñanza
+
+Para este apartado nos restringimos a colegios de enseñanza media jóvenes. Un estudiante puede seguir la línea humanista científica (HC) o técnico profesional (TP).
+
+```{r rama}
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+
+chc<-sapply(ee,function(x){sum(x[,c("rama")]=="HC",na.rm = TRUE)})
+ctp<-sapply(ee,function(x){sum(x[,c("rama")]=="TP",na.rm = TRUE)})
+
+tab_rama<-data.frame(cagno_tab,chc,ctp,ctotal_tab)
+
+kable(x=tab_rama,col.names = c("Año","HC","TP","Región de O'Higgins"), caption = "Número de estudiantes originarios de la Región de O'Higgins participando en los distintos tipos de  modalidad de enseñanza. Nos restringimos a colegios con enseñanza media jóvenes.")
+
+
+# create a dataset
+tab_ramat<-as.data.frame(t(tab_rama))
+colnames(tab_ramat)<-paste("a",tab_rama[,1],sep="")
+tab_ramat<-tab_ramat[rownames(tab_ramat) %in% c("chc","ctp"),]
+tab_ramat$rama<-c("HC","TP") # rownames(tab_dept)
+tab_ramat_long<- reshape(tab_ramat, varying = paste("a",tab_dep[,1],sep=""),v.names = "Nro_EE", timevar = "agno",times=tab_rama[,1],direction = "long")
+  
+# Stacked + percent
+plot_rama1<-ggplot(tab_ramat_long, aes(fill=rama, y=Nro_EE, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de estudiantes", x = "Año",fill = "Rama")
+print(plot_rama1)
+
+png(filename = "Figura12_estudiantes_rama_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rama1)
+dev.off()
+
+### Zoom agno 2022
+ramat <- table(ee22$NOM_DEPROV_ALU,ee22$rama)
+rama <- as.data.frame(ramat)
+colnames(rama)<-c("Provincia","Rama","Nro_EE")
+kable(ramat, caption = "Número de estudiantes originarios de la Región de O'Higgins por provincia y modalidad de enseñanza durante el año 2022. Nos restringimos a colegios con enseñanza media jóvenes.")
+
+plot_rama22<-ggplot(rama, aes(fill=Rama, y=Nro_EE, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de estudiantes", x = "Provincia",fill = "Rama")
+print(plot_rama22)
+
+png(filename = "Figura13_estudiantes_rama_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rama22)
+dev.off()
+```
+
+
+
+
+

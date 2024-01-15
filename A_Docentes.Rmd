@@ -1,0 +1,195 @@
+---
+title: "A_Docentes"
+output:
+  html_document: default
+  word_document: default
+date: "2023-11-03"
+---
+
+En este archivo se presentan los códigos para generar los resultados de la sección "Docentes" del "Informe Estadístico sobre el sistema educacional escolar en la Región de O'Higgins entre los años 2018 y 2022". Solo se consideraron los establecimientos educacionales que se declaraban en funcionamiento en la base de datos. 
+
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(knitr)
+#library(crosstable)
+
+load("/Users/valentinagiaconi/Dropbox/ICEd/IER/Scripts/BD_docentes.RData")
+  
+```
+
+
+## Panorama General
+
+```{r panorama}
+# Tabla con total de docentes
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+ccachapoal_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_RBD")]=="CACHAPOAL")})
+ccardenal_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_RBD")]=="CARDENAL CARO")})
+ccolchagua_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_RBD")]=="COLCHAGUA")})
+
+tab_panorama<-data.frame(agno=cagno_tab,ncachapoal=ccachapoal_tab,ncardenal=ccardenal_tab,ncolchagua=ccolchagua_tab,total=ctotal_tab)
+
+kable(x=tab_panorama,col.names = c("Año","Cachapoal","Cardenal Caro","Colchagua","Región de O'Higgins"), caption = "Número de docentes ejerciendo en establecimientos de la región y de cada provincia de la Región de O'Higgins")
+
+summary(ee22[,c("NOM_DEPROV_RBD","DOC_GENERO","TIT_ID_1","TIT_ID_2")])
+
+```
+
+## Género
+
+```{r genero}
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+chombre<-sapply(ee,function(x){sum(x[,c("DOC_GENERO")]==1)})
+cmujer<-sapply(ee,function(x){sum(x[,c("DOC_GENERO")]==2)})
+
+tab_dep<-data.frame(cagno_tab,chombre,cmujer,ctotal_tab)
+
+kable(x=tab_dep,col.names = c("Año","Hombres","Mujeres","Región de O'Higgins"), caption = "Número de docentes de la Región de O'Higgins por género")
+
+
+# create a dataset
+tab_dept<-as.data.frame(t(tab_dep))
+colnames(tab_dept)<-paste("a",tab_dep[,1],sep="")
+tab_dept<-tab_dept[2:(nrow(tab_dept)-1),]
+tab_dept$genero<-c("Hombres","Mujeres") # rownames(tab_dept)
+tab_dept_long<- reshape(tab_dept, varying = paste("a",tab_dep[,1],sep=""),v.names = "Nro_DD", timevar = "agno",times=tab_dep[,1],direction = "long")
+  
+# Stacked + percent
+plot_dep1<-ggplot(tab_dept_long, aes(fill=genero, y=Nro_DD, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de docentes", x = "Año",fill = "Género")
+print(plot_dep1)
+
+png(filename = "Figura14_docentes_genero_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep1)
+dev.off()
+
+### Zoom agno 2022
+depet <- table(ee22$NOM_DEPROV_RBD,ee22$DOC_GENERO)
+depe <- as.data.frame(depet)
+colnames(depe)<-c("Provincia","genero","Nro_DD")
+kable(depet, caption = "Número de docentes ejerciendo en la Región de O'Higgins por provincia y género durante el año 2022.")
+
+plot_dep22<-ggplot(depe, aes(fill=genero, y=Nro_DD, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de docentes", x = "Provincia",fill = "Género")
+print(plot_dep22)
+
+png(filename = "Figura15_docentes_genero_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep22)
+dev.off()
+
+
+```
+
+## Tipo de título
+
+```{r titulo}
+
+#table(ee22$TIT_ID_1,ee22$TIT_ID_2,useNA = "ifany")
+# Es relevante usar TIT_ID_1 solamente porque todos los que tienen segundo título estan bien clasificados, a raiz de la tabla es evidente que TIT_ID_1 es el principal
+
+
+for(i in 1:length(ee)){
+  ee_aux<-ee[[i]]
+  ee_aux$TNA_1<-!is.na(ee_aux$TIP_TIT_ID_1)
+  ee_aux$TNA_2<-!is.na(ee_aux$TIP_TIT_ID_2)
+  ee_aux$TNA_12<-ee_aux$TNA_1 & ee_aux$TNA_2
+  
+  ee_aux$tit<-NA
+  ee_aux$tit<- ifelse(ee_aux$TIT_ID_1==0,"Sin información",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIT_ID_1==2,"Titulado en otra área",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIT_ID_1==3,"No titulado",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 11 & ee_aux$TNA_1,"Parvularia",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 12 & ee_aux$TNA_1 ,"Diferencial",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 13 & ee_aux$TNA_1 ,"Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 14 & ee_aux$TNA_1 ,"Media",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 15 & ee_aux$TNA_1 ,"Parvularia y Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 16 & ee_aux$TNA_1 ,"Básica y Media",ee_aux$tit)
+  
+  #parvularia 11
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 11 & ee_aux$TIP_TIT_ID_2 == 12 & ee_aux$TNA_12,"Parvularia y Diferencial",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 11 & ee_aux$TIP_TIT_ID_2 == 13 & ee_aux$TNA_12,"Parvularia y Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 11 & ee_aux$TIP_TIT_ID_2 == 14 & ee_aux$TNA_12,"Parvularia y Media",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 11 & ee_aux$TIP_TIT_ID_2 == 15 & ee_aux$TNA_12,"Parvularia y Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 11 & ee_aux$TIP_TIT_ID_2 == 16 & ee_aux$TNA_12,"Parvularia, Básica y Media",ee_aux$tit)
+      
+  #diferencial 12
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 12 & ee_aux$TIP_TIT_ID_2 == 13 & ee_aux$TNA_12,"Diferencial y Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 12 & ee_aux$TIP_TIT_ID_2 == 14 & ee_aux$TNA_12,"Diferencial y Media",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 12 & ee_aux$TIP_TIT_ID_2 == 15 & ee_aux$TNA_12,"Diferencial, Parvularia y Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 12 & ee_aux$TIP_TIT_ID_2 == 16 & ee_aux$TNA_12,"Diferencial, Básica y Media",ee_aux$tit)
+  
+  #básica 13
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 13 & ee_aux$TIP_TIT_ID_2 ==14 & ee_aux$TNA_12 ,"Básica y Media",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 13 & ee_aux$TIP_TIT_ID_2 ==15 & ee_aux$TNA_12 ,"Parvularia y Básica",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 13 & ee_aux$TIP_TIT_ID_2 ==16 & ee_aux$TNA_12 ,"Básica y Media",ee_aux$tit)
+  
+  #media 14
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 14 & ee_aux$TIP_TIT_ID_2 ==15 & ee_aux$TNA_12 ,"Parvularia, Básica y Media",ee_aux$tit)
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 14 & ee_aux$TIP_TIT_ID_2 ==16 & ee_aux$TNA_12 ,"Básica y Media",ee_aux$tit)
+
+
+  #"Parvularia y Básica" 15
+  ee_aux$tit<- ifelse(ee_aux$TIP_TIT_ID_1 == 15 & ee_aux$TIP_TIT_ID_2 ==16 & ee_aux$TNA_12 ,"Parvularia, Básica y Media",ee_aux$tit)
+  
+  ee[[i]]<-ee_aux
+#  print(i)
+#  print(table(ee_aux$tit,ee_aux$TIP_TIT_ID_1,useNA = "ifany"))
+}
+
+ee22<-ee[[5]]
+```
+
+```{r tabla_graficos_titulo}
+categorias<-c("Parvularia","Parvularia y Básica","Parvularia y Diferencial","Diferencial, Parvularia y Básica","Básica","Básica y Media","Diferencial","Diferencial y Básica","Diferencial y Media","Diferencial, Básica y Media","Media","Titulado en otra área","No titulado","Sin información")
+
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+tab_dep<-data.frame(cagno_tab)
+
+for(i in 1:length(categorias)){
+  catg<-categorias[i]
+  counts<-data.frame(var1<-sapply(ee,function(x){sum(x[,c("tit")]==catg)}))
+  colnames(counts)<-catg
+  tab_dep<-cbind(tab_dep,counts)
+}
+
+tab_dep<-cbind(tab_dep,counts)
+
+
+# create a dataset
+tab_dept<-as.data.frame(t(tab_dep))
+colnames(tab_dept)<-paste("a",tab_dep[,1],sep="")
+tab_dept<-tab_dept[2:(nrow(tab_dept)-1),]
+tab_dept$titulo<-categorias # rownames(tab_dept)
+tab_dept_long<- reshape(tab_dept, varying = paste("a",tab_dep[,1],sep=""),v.names = "Nro_DD", timevar = "agno",times=tab_dep[,1],direction = "long")
+
+kable(x=tab_dept, caption = "Número de docentes de la Región de O'Higgins por tipo de título en relación al nivel educacional donde se pueden desempeñar")
+  
+# Stacked + percent
+plot_dep1<-ggplot(tab_dept_long, aes(fill=titulo, y=Nro_DD, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de docentes", x = "Año",fill = "Título(s)")
+print(plot_dep1)
+
+png(filename = "Figura16_docentes_titulo_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep1)
+dev.off()
+
+### Zoom agno 2022
+depet <- table(ee22$NOM_DEPROV_RBD,ee22$tit)
+depe <- as.data.frame(depet)
+colnames(depe)<-c("Provincia","titulo","Nro_DD")
+kable(t(depet), caption = "Número de docentes ejerciendo en la Región de O'Higgins por tipo de título durante el año 2022.")
+
+plot_dep22<-ggplot(depe, aes(fill=titulo, y=Nro_DD, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de docentes", x = "Provincia",fill = "Título")
+print(plot_dep22)
+
+png(filename = "Figura17_docentes_titulo_provincia.png", width = 18, height = 10, units="cm", res=300)
+print(plot_dep22)
+dev.off()
+
+
+```

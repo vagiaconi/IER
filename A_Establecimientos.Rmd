@@ -1,0 +1,249 @@
+---
+title: "A_Establecimientos"
+output:
+  html_document: default
+  word_document: default
+date: "2023-11-03"
+---
+
+En este archivo se presentan los códigos para generar los resultados de la sección "Establecimientos" del "Informe Estadístico sobre el sistema educacional escolar en la Región de O'Higgins entre los años 2018 y 2022". Solo se consideraron los establecimientos educacionales que se declaraban en funcionamiento en la base de datos. 
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(sp)
+library(tmap)
+
+#Datos MINEDUC
+load("/Users/valentinagiaconi/Dropbox/ICEd/IER/Scripts/BD_establecimiento.RData")
+
+load("/Users/valentinagiaconi/Dropbox/ICEd/IER/Datos\ comunas/data_IR2022.RData")
+```
+
+# Establecimientos
+
+## Panorama General
+
+```{r panorama}
+# Tabla con total de escuelas
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+ccachapoal_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_RBD")]=="CACHAPOAL")})
+ccardenal_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_RBD")]=="CARDENAL CARO")})
+ccolchagua_tab<-sapply(ee,function(x){sum(x[,c("NOM_DEPROV_RBD")]=="COLCHAGUA")})
+
+tab_panorama<-data.frame(agno=cagno_tab,ncachapoal=ccachapoal_tab,ncardenal=ccardenal_tab,ncolchagua=ccolchagua_tab,total=ctotal_tab)
+
+kable(x=tab_panorama,col.names = c("Año","Cachapoal","Cardenal Caro","Colchagua","Región de O'Higgins"), caption = "Número de establecimientos en la región y en cada provincia de la Región de O'Higgins")
+
+```
+
+## Dependencia
+
+Comenzamos caracterizando la dependencia a nivel regional.
+
+```{r dependencia-regional}
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+cmu<-sapply(ee,function(x){sum(x[,c("dep")]=="Municipal")})
+cpp<-sapply(ee,function(x){sum(x[,c("dep")]=="Part. Pag.")})
+cps<-sapply(ee,function(x){sum(x[,c("dep")]=="Part. Subv.")})
+csl<-sapply(ee,function(x){sum(x[,c("dep")]=="SLEP")})
+cad<-sapply(ee,function(x){sum(x[,c("dep")]=="Adm. Del.")})
+
+tab_dep<-data.frame(cagno_tab,cmu,csl,cad,cps,cpp,ctotal_tab)
+
+kable(x=tab_dep,col.names = c("Año","Municipal","SLEP","Adm. Del.","Part. Subv.","Part. Pag.","Región de O'Higgins"), caption = "Número de establecimientos  por tipo de dependencia en la Región de O'Higgins.")
+
+
+# create a dataset
+tab_dept<-as.data.frame(t(tab_dep))
+colnames(tab_dept)<-paste("a",tab_dep[,1],sep="")
+tab_dept<-tab_dept[2:(nrow(tab_dept)-1),]
+tab_dept$dep<-c("Municipal","SLEP","Adm. Del.","Part. Subv.","Part. Pag.") # rownames(tab_dept)
+tab_dept_long<- reshape(tab_dept, varying = paste("a",tab_dep[,1],sep=""),v.names = "Nro_EE", timevar = "agno",times=tab_dep[,1],direction = "long")
+  
+# Stacked + percent
+plot_dep1<-ggplot(tab_dept_long, aes(fill=dep, y=Nro_EE, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Año",fill = "Dependencia")
+print(plot_dep1)
+
+png(filename = "Figura1_establecimientos_dep_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep1)
+dev.off()
+
+### Zoom agno 2022
+depet <- table(ee22$NOM_DEPROV_RBD,ee22$dep)
+depe <- as.data.frame(depet)
+colnames(depe)<-c("Provincia","Dependencia","Nro_EE")
+kable(depet, caption = "Número de establecimientos  por provincia y dependencia en la Región de O'Higgins durante el año 2022.")
+
+plot_dep22<-ggplot(depe, aes(fill=Dependencia, y=Nro_EE, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Provincia",fill = "Dependencia")
+
+png(filename = "Figura2_establecimientos_dep_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_dep22)
+dev.off()
+
+
+```
+
+
+## Ruralidad
+
+```{r ruralidad-establecimientos}
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+cru<-sapply(ee,function(x){sum(x[,c("RURAL_RBD")]==1)})
+cur<-sapply(ee,function(x){sum(x[,c("RURAL_RBD")]==0)})
+por.rural<- round(100*cru/ctotal_tab,1)
+por.urban<- round(100*cur/ctotal_tab,1)
+
+tab_rur<-data.frame(cagno_tab,cru,cur,por.rural,por.urban,ctotal_tab)
+
+kable(x=tab_rur,col.names = c("Año","Rural","Urbano","% Rural.","% Urbano","Región de O'Higgins"), caption = "Número y porcentaje de establecimientos por ruralidad en la Región de O'Higgins.")
+
+
+# create a dataset
+tab_rurt<-as.data.frame(t(tab_rur))
+colnames(tab_rurt)<-paste("a",tab_rur[,1],sep="")
+tab_rurt<-tab_rurt[rownames(tab_rurt) %in% c("por.rural","por.urban"),]
+tab_rurt$rur<-rownames(tab_rurt)
+tab_rurt$rur<-ifelse(tab_rurt$rur=="por.rural","Rural",tab_rurt$rur)
+tab_rurt$rur<-ifelse(tab_rurt$rur=="por.urban","Urbano",tab_rurt$rur)
+tab_rurt_long<- reshape(tab_rurt, varying = paste("a",tab_rur[,1],sep=""),v.names = "Nro_EE", timevar = "agno",times=tab_rur[,1],direction = "long")
+  
+# Stacked + percent
+plot_rur1<-ggplot(tab_rurt_long, aes(fill=rur, y=Nro_EE, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Año",fill = "Ruralidad")
+print(plot_rur1)
+
+png(filename = "Figura3_establecimientos_rural_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rur1)
+dev.off()
+
+### Zoom agno 2022
+rurt <- table(ee22$NOM_DEPROV_RBD,ee22$ruralidad)
+rur <- as.data.frame(rurt)
+colnames(rur)<-c("Provincia","Ruralidad","Nro_EE")
+
+plot_rur22<-ggplot(rur, aes(fill=Ruralidad, y=Nro_EE, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Provincia",fill = "Ruralidad")
+
+png(filename = "Figura4_establecimientos_rural_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rur22)
+dev.off()
+
+```
+
+
+
+```{r mapa}
+# Calculamos el porcentaje de establecimientos rurales
+
+rel_freq <- function(x) {100*sum(x)/length(x)}
+dcomunas <- aggregate(x=ee22$RURAL_RBD, by=list(ee22$COD_COM_RBD), FUN=rel_freq) %>%
+  rename(cod_comuna = Group.1 , freq_rural_estab = x)
+
+##### AÑADIMOS LA COLUMNA QUE QUEREMOS VISUALIZAR AL MAPA DE CHILE #####
+variables_comunas <- merge(dcomunas, variables_comunas, by="cod_comuna")
+
+variables_comunas = variables_comunas[match(mapa$CUT_COM,variables_comunas$cod_comuna),] #REORDENAMOS LOS DATOS SEGUN LOS DATOS GEOESPACIALES
+columna = variables_comunas$freq_rural_estab #COLUMNA A GRAFICAR
+
+mapa@data = cbind(mapa@data, columna)
+
+##### CREAMOS LOS BINS #####
+
+n = 6 #CANTIDAD DE BINS
+
+max_col = max(columna, na.rm = TRUE)
+min_col = min(columna, na.rm = TRUE)
+
+rango   = (max_col-min_col)/n
+
+mybins = seq(0, 100, by = 20)
+
+##### CREAMOS EL MAPA #####
+
+var = 'columna'                                      #nombre de la columna que a?adimos a los datos geoespaciales, por defecto es columna
+
+plot_final = tm_shape(mapa,projection = 3857 ) +     #mapa, sistemas de coordenadas
+  tm_polygons(var,                                   #nombre columna
+              breaks = mybins,                       #bins
+              palette = 'BuPu',                      #paleta a utilizar
+              border.col = 'white',                  #color de bordes de las comunas
+              border.alpha = 1,                      #opacidad de los bordes
+              title = 'Porcentaje (%)')+             #titulo de la leyenda
+  tm_legend(legend.position = c('left','bottom')) +  #Posicion de la leyenda
+  tm_layout(title = 'Porcentaje de EE Rurales por Comuna', #titutlo del grafico
+            title.size = 1,                                             #escala del titulo
+            title.position = c('center','top')) +                       #posicion del titulo
+  tm_layout(inner.margins = c(0.2,0.1,0.1,0.08)) +                      #Para aumentar los bordes, bottom,left,top,right
+  tm_text('COMUNA', size = "AREA")                                       #A?adimos el texto 'COMUNA' a cada comuna, con size = 'AREA' metodo que al texto de 'COMUNA' le da un tama?o proporcional al area de la comuna
+
+png(filename = "Figura5_establecimientos_rural_comuna.png", width = 21, height = 15, units="cm", res=300)
+print(plot_final)
+dev.off()
+
+
+```
+
+
+
+
+## Modalidades de enseñanza
+
+Nos restringimos a colegios de enseñanza media jóvenes. Separamos en las categorías HC, TP y Polivalente (notar que un colegio Polivalente no cuenta como HC ni como TP)
+
+```{r rama}
+
+cagno_tab<-2018:2022
+ctotal_tab<-sapply(ee,nrow)
+
+chc<-sapply(ee,function(x){sum(x[,c("rama")]=="HC",na.rm = TRUE)})
+ctp<-sapply(ee,function(x){sum(x[,c("rama")]=="TP",na.rm = TRUE)})
+cpo<-sapply(ee,function(x){sum(x[,c("rama")]=="Polivalente",na.rm = TRUE)})
+
+tab_rama<-data.frame(cagno_tab,chc,ctp,cpo,ctotal_tab)
+
+kable(x=tab_rama,col.names = c("Año","HC","TP","Polivalente","Región de O'Higgins"), caption = "Número de establecimientos  por tipo de modalidad de enseñanza en la Región de O'Higgins .Nos restringimos a colegios con enseñanza media jóvenes.")
+
+
+# create a dataset
+tab_ramat<-as.data.frame(t(tab_rama))
+colnames(tab_ramat)<-paste("a",tab_rama[,1],sep="")
+tab_ramat<-tab_ramat[rownames(tab_ramat) %in% c("chc","ctp","cpo"),]
+tab_ramat$rama<-c("HC","TP","Polivalente") # rownames(tab_dept)
+tab_ramat_long<- reshape(tab_ramat, varying = paste("a",tab_dep[,1],sep=""),v.names = "Nro_EE", timevar = "agno",times=tab_rama[,1],direction = "long")
+  
+# Stacked + percent
+plot_rama1<-ggplot(tab_ramat_long, aes(fill=rama, y=Nro_EE, x=agno)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Año",fill = "Rama")
+print(plot_rama1)
+
+png(filename = "Figura6_rama_agno.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rama1)
+dev.off()
+
+### Zoom agno 2022
+ramat <- table(ee22$NOM_DEPROV_RBD,ee22$rama)
+rama <- as.data.frame(ramat)
+colnames(rama)<-c("Provincia","Rama","Nro_EE")
+kable(ramat, caption = "Número de establecimientos  por provincia y modalidad de enseñanza en la Región de O'Higgins durante el año 2022. Nos restringimos a colegios con enseñanza media jóvenes.")
+
+plot_rama22<-ggplot(rama, aes(fill=Rama, y=Nro_EE, x=Provincia)) + 
+    geom_bar(position="fill", stat="identity")+labs(y= "Proporción de establecimientos", x = "Provincia",fill = "Rama")
+
+png(filename = "Figura6_rama_provincia.png", width = 14, height = 10, units="cm", res=300)
+print(plot_rama22)
+dev.off()
+
+
+```
+
+
+
+
+
